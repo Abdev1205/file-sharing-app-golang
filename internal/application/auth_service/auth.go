@@ -20,7 +20,10 @@ type User struct {
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var user User
-		json.NewDecoder(r.Body).Decode(&user)
+		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+			http.Error(w, "Invalid input", http.StatusBadRequest)
+			return
+		}
 
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -28,13 +31,26 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		_, err = db.Exec("INSERT INTO users (email, password) VALUES ($1, $2)", user.Email, hashedPassword)
+		// Insert the user and retrieve the generated ID
+		err = db.QueryRow("INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id", user.Email, hashedPassword).Scan(&user.ID)
 		if err != nil {
 			http.Error(w, "Failed to Register User", http.StatusInternalServerError)
 			return
 		}
 
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]interface{}{
+			"message": "User registered successfully",
+			"user": map[string]interface{}{
+				"id":    user.ID,
+				"email": user.Email,
+			},
+		}
+
 		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -83,8 +99,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			Name:     "token",
 			Value:    tokenStr,
 			Expires:  time.Now().Add(72 * time.Hour),
-			HttpOnly: true,
-			Secure:   false,
+			HttpOnly: false,
 		})
 
 		// now we will return reponse as user and message user Logged in Successfully

@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	// "github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"log"
 	"os"
 )

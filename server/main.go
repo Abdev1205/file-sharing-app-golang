@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/Abdev1205/21BCE11045_Backend/internal/adapters/cache"
 	"github.com/Abdev1205/21BCE11045_Backend/internal/adapters/database"
@@ -24,8 +25,26 @@ func main() {
 	// redis cache initialization
 	redisClient := cache.ConnectRedis()
 
+	// Creating and ensuring the 'uploads' folder exists
+	uploadDir := "./uploads"
+	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
+		err := os.MkdirAll(uploadDir, os.ModePerm)
+		if err != nil {
+			log.Fatalf("Failed to create uploads directory: %v", err)
+		}
+		log.Printf("Uploads directory created: %s", uploadDir)
+	}
+
 	// intialising the router
 	router := mux.NewRouter()
+
+	// Starting route
+	// here i just want to say that welcome to abhay file sharing app backend
+
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Welcome to Abhay File Sharing App Backend"))
+	})
 
 	// public routres taht we can show the content without valid jwt credentials
 	router.HandleFunc("/register", auth_service.RegisterHandler(db)).Methods("POST")
@@ -40,7 +59,10 @@ func main() {
 
 	protected.HandleFunc("/upload", file_service.UploadFileHandler(db, redisClient)).Methods("POST")
 	protected.HandleFunc("/files", file_service.GetFilesHandler(db, redisClient)).Methods("GET")
-	protected.HandleFunc("/share/{file_id}", file_service.ShareFileHandler(db, redisClient)).Methods("GET")
+	protected.HandleFunc("/share/{id:[0-9]+}", file_service.ShareFileHandler(db, redisClient)).Methods("GET")
+	protected.HandleFunc("/files/search", file_service.SearchFilesHandler(db, redisClient)).Methods("GET")
+
+	router.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadDir))))
 
 	// creating a server on port 8080
 	log.Printf("Starting Server on port 8080")
